@@ -17,12 +17,12 @@ using namespace falaise::properties;
 struct CalibratorConfig {
   CalibratorConfig() = default;
   explicit CalibratorConfig(const datatools::properties& p) :
-      SD_label(getValueOrDefault(p, "SD_label", snemo::datamodel::data_info::default_simulated_data_label())),
-      CD_label(getValueOrDefault(p, "CD_label", snemo::datamodel::data_info::default_calibrated_data_label())),
-      Geo_label(getValueOrDefault(p, "Geo_label", snemo::processing::service_info::default_geometry_service_label())),
-      hit_category(getValueOrDefault(p, "hit_category", std::string("gg"))),
-      random_id(getValueOrDefault(p, "random.id", std::string("mt19937"))),
-      random_seed(getValueOrDefault(p, "random.seed", 12345)) {
+    SD_label(getValueOrDefault(p, "SD_label", snemo::datamodel::data_info::default_simulated_data_label())),
+    CD_label(getValueOrDefault(p, "CD_label", snemo::datamodel::data_info::default_calibrated_data_label())),
+    Geo_label(getValueOrDefault(p, "Geo_label", snemo::processing::service_info::default_geometry_service_label())),
+    hit_category(getValueOrDefault(p, "hit_category", std::string("gg"))),
+    random_id(getValueOrDefault(p, "random.id", std::string("mt19937"))),
+    random_seed(getValueOrDefault(p, "random.seed", 12345)) {
   }
 
   std::string SD_label; // inbox
