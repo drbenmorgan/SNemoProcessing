@@ -28,23 +28,9 @@ namespace falaise {
     using existing_key_error = std::logic_error;
     using wrong_type_error = std::logic_error;
 
-    // property_set can only hold a limited set of types
-    // Need to think about types for Paths/Quantities...
-    using types = boost::mpl::vector<int,
-                                     double,
-                                     bool,
-                                     std::string,
-                                     std::vector<int>,
-                                     std::vector<double>,
-                                     std::vector<bool>,
-                                     std::vector<std::string>,
-                                     path>;
-
     // Need default c'tor as we have user-defined c'tor
     property_set() = default;
     property_set(datatools::properties const& ps);
-
-    operator datatools::properties() const;
 
     // - Observers
 
@@ -56,6 +42,9 @@ namespace falaise {
 
     //! Returns true if the property_set contains a pair with the supplied key
     bool has_key(std::string const& key) const;
+
+    //! Convert back to datatools::properties
+    operator datatools::properties() const;
 
     // - Retrievers
 
@@ -82,6 +71,19 @@ namespace falaise {
     bool erase(std::string const& key);
 
   private:
+    // property_set can only hold a limited set of types
+    using types = boost::mpl::vector<int,
+                                     double,
+                                     bool,
+                                     std::string,
+                                     std::vector<int>,
+                                     std::vector<double>,
+                                     std::vector<bool>,
+                                     std::vector<std::string>,
+                                     path>;
+    template <typename T>
+    using can_hold = typename boost::mpl::contains<types, T>::type;
+
     datatools::properties ps_;
   };
 } /* falaise */
@@ -113,15 +115,12 @@ namespace falaise {
   T
   property_set::get(std::string const& key) const
   {
-    // Simplest possible interface, but needs further checking
-    // Should return value if present, throw otherwise (and needs type
-    // checking!)
-    static_assert(boost::mpl::contains<types, T>::type::value,
-                  "property_set cannot hold values of type T");
+    static_assert(can_hold<T>::value, "property_set cannot hold values of type T");
     // Check key ourselves so we can throw a more informative error
     if (! ps_.has_key(key)) {
       throw missing_key_error("property_set does not hold a key '"+key+"'");
     }
+    // Should also check that T matches held type, in particular scalar/vector
     T result;
     ps_.fetch(key, result);
     return result;
@@ -131,10 +130,10 @@ namespace falaise {
   T
   property_set::get(std::string const& key, T const& default_value) const
   {
-    static_assert(boost::mpl::contains<types, T>::type::value,
-                  "property_set cannot hold values of type T");
+    static_assert(can_hold<T>::value, "property_set cannot hold values of type T");
     T result{default_value};
     if (ps_.has_key(key)) {
+      // Should also check that T matches held type, in particular scalar/vector
       ps_.fetch(key, result);
     }
     return result;
@@ -144,8 +143,7 @@ namespace falaise {
   void
   property_set::put(std::string const& key, T const& value)
   {
-    static_assert(boost::mpl::contains<types, T>::type::value,
-                  "property_set cannot hold values of type T");
+    static_assert(can_hold<T>::value, "property_set cannot hold values of type T");
     // Check directly to use our clearer exception type
     if (ps_.has_key(key)) {
       throw existing_key_error{"property_set already contains key " + key};
@@ -157,8 +155,7 @@ namespace falaise {
   void
   property_set::put_or_replace(std::string const& key, T const& value)
   {
-    static_assert(boost::mpl::contains<types, T>::type::value,
-                  "property_set cannot hold values of type T");
+    static_assert(can_hold<T>::value, "property_set cannot hold values of type T");
     ps_.update(key, value);
   }
 
@@ -178,14 +175,14 @@ namespace falaise {
   path property_set::get(std::string const& key) const
   {
     // Check key ourselves so we can throw a more informative error
-    if (! ps_.has_key(key)) {
+    if (!ps_.has_key(key)) {
       throw missing_key_error("property_set does not hold a key '"+key+"'");
     }
 
     using data_t = datatools::properties::data;
     data_t x = ps_.get(key);
     if (!x.is_path()) {
-      throw wrong_type_error("value at key "+key+" is not of type falaise::path");
+      throw wrong_type_error("value at key '"+key+"' is not of type falaise::path");
     }
     return path{x.get_string_value()};
   }
