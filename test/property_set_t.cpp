@@ -2,6 +2,9 @@
 
 #include "property_set.h"
 
+#include "bayeux/datatools/units.h"
+#include "bayeux/datatools/clhep_units.h"
+
 // - Fixtures and helpers
 datatools::properties
 makeSampleProperties()
@@ -120,4 +123,78 @@ TEST_CASE("Path type put/get specialization works", "")
     ps.put("home", falaise::path{"$HOME"});
     REQUIRE(ps.get<falaise::path>("home") == getenv("HOME"));
   }
+}
+
+
+
+TEST_CASE("Quantity type put/get specialization works", "")
+{
+  falaise::property_set ps;
+  ps.put("number", 3.14);
+  ps.put("quantity", falaise::quantity{4.13, "m/s2"});
+
+  REQUIRE_THROWS_AS(ps.get<falaise::quantity>("number"), falaise::property_set::wrong_type_error);
+  REQUIRE_THROWS_AS(ps.get<double>("quantity"), falaise::property_set::wrong_type_error);
+
+  REQUIRE(ps.get<falaise::quantity>("quantity").value() == Approx(4.13));
+  REQUIRE(ps.get<falaise::quantity>("quantity").unit() == "m/s2");
+
+  falaise::quantity x{3.14,"m/s2"};
+  REQUIRE(x.value() == Approx(3.14));
+}
+
+
+TEST_CASE("Property units/quantities", "")
+{
+  // So get rule for a quantity is:
+  // - must be real
+  // - must have explicit unit
+  // - must have unit symbol
+  // Thus put rule is
+  // - Must set value, explicit unit flag, and unit symbol (with dimensional checks)
+  //
+  // NB: also means *should* not extract double unless it is dimensionless
+
+
+  // What info do we get, if any, from a dimensioned real.
+  datatools::properties ps;
+  // Try and add stuff from a string
+  // Bar is valid, it will be set with explicit unit and symbol (and properties parsing validates symbol matches dimension)
+  // Foo is not valid, but accepted by properties, imported as a dimensionless scalar
+  std::string myprops{
+    "bar : real as velocity = 3.14 m/s \n"
+    "foo : real as length = 2.0\n"
+  };
+
+  std::istringstream iput{myprops};
+  datatools::properties::config reader;
+  reader.read(iput, ps);
+
+  ps.store_with_explicit_unit("weight", 1.2*CLHEP::kg);
+  // Ugh, have to set unit symbol explicitly in code...
+  ps.set_unit_symbol("weight", "g");
+
+
+  ps.tree_dump(std::cout);
+  std::cout << "weight: x" << ps.get_unit_symbol("weight") << "x\n";
+  double val{0.0};
+
+  // Gives the raw value in internal units (CLHEP) system
+  ps.fetch("weight", val);
+  // so must be converted
+  std::cout << val/CLHEP::g << std::endl;
+
+  // This is the same, but checks that value has explicit unit (though
+  // as above, this just marks it as dimensioned)
+  val = ps.fetch_real_with_explicit_unit("weight");
+  std::cout << val << std::endl;
+
+  // If we have a unit symbol, then we can get the "label"
+  std::string unit_label{};
+  double cFactor{0.0};
+  bool hasLabel = datatools::units::find_unit(ps.get_unit_symbol("weight"), cFactor, unit_label);
+  if (hasLabel) {
+    std::cout << "weight has label" << unit_label << std::endl;
+  }
+
 }

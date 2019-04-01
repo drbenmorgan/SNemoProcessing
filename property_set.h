@@ -2,6 +2,7 @@
 #define FALAISE_PROPERTY_SET_H
 
 #include "bayeux/datatools/properties.h"
+#include "bayeux/datatools/units.h"
 #include "boost/mpl/contains.hpp"
 #include "boost/mpl/vector.hpp"
 
@@ -39,6 +40,62 @@ namespace falaise {
     os << std::string{p};
     return os;
   }
+
+  // Basic type for a quantity
+
+  class quantity {
+  public:
+    using bad_unit_error = std::logic_error;
+
+    quantity() = default;
+    quantity(double value, std::string const& unit) : value_(value), unit_name(unit)
+    {
+      if (!datatools::units::find_unit(unit_name, unit_scale, dimension_name)) {
+        throw bad_unit_error("no dimensional information for unit '" + unit_name +
+                             "'");
+      }
+    }
+
+    //! Convert quantity to double in underlying system of units scaling
+    operator double() const { return value_ * unit_scale; }
+
+    //! Return the concrete value for the quantity in its current units
+    double
+    value() const
+    {
+      return value_;
+    }
+
+    //! Return value for the quantity, converted to supplied unit
+    //! \throws bad_unit_error if dimension if supplied unit is different to that of the quantity
+    double
+    value_in(datatools::units::unit const& unit) const
+    {
+      if (unit.get_dimension_label() != dimension_name) {
+        throw bad_unit_error("different dimensions!!");
+      }
+
+      return value_ * unit_scale / unit;
+    }
+
+    std::string const&
+    unit() const
+    {
+      return unit_name;
+    }
+
+    std::string const&
+    dimension() const
+    {
+      return dimension_name;
+    }
+
+  private:
+    double value_{0.0};
+    std::string unit_name{"pdu"};
+    std::string dimension_name{"procedure_defined"};
+    double unit_scale{1.0};
+  };
 
   class property_set {
   public:
@@ -78,6 +135,7 @@ namespace falaise {
     T get(std::string const& key, T const& default_value) const;
 
     // - Inserters
+
     //! Insert key-value pair in property_set, throwing if key already exist
     template <typename T>
     void put(std::string const& key, T const& value);
@@ -87,6 +145,7 @@ namespace falaise {
     void put_or_replace(std::string const& key, T const& value);
 
     // - Deleters:
+
     //! Erase the name-value pair matching name, returning true on success,
     // false otherwise
     bool erase(std::string const& key);
@@ -98,6 +157,7 @@ namespace falaise {
                                       bool,
                                       std::string,
                                       path,
+                                      quantity,
                                       std::vector<int>,
                                       std::vector<double>,
                                       std::vector<bool>,
@@ -131,6 +191,9 @@ namespace falaise {
 
     //! Return true if value at key has type falaise::path
     bool is_type_impl_(std::string const& key, path) const;
+
+    //! Return true if value at key has type falaise::quantity
+    bool is_type_impl_(std::string const& key, quantity) const;
 
     //! Return true if value at key has type std::vector<int>
     bool is_type_impl_(std::string const& key, std::vector<int>) const;
@@ -244,6 +307,21 @@ namespace falaise {
     ps_.store_path(key, value);
   }
 
+  // Specialization for quantity type
+  template <>
+  void
+  property_set::put(std::string const& key, quantity const& value)
+  {
+    // Check directly to use our clearer exception type
+    if (ps_.has_key(key)) {
+      throw existing_key_error{"property_set already contains key " + key};
+    }
+
+    // Need to think about how values are transformed...
+    ps_.store_with_explicit_unit(key, value.value());
+    ps_.set_unit_symbol(key, value.unit());
+  }
+
   template <typename T>
   void
   property_set::put_or_replace(std::string const& key, T const& value)
@@ -286,7 +364,9 @@ namespace falaise {
   bool
   property_set::is_type_impl_(std::string const& key, double) const
   {
-    return ps_.is_real(key) && ps_.is_scalar(key);
+    // Assume extraction of double is always dimensionless
+    return ps_.is_real(key) && (!ps_.has_explicit_unit(key)) &&
+           (!ps_.has_unit_symbol(key)) && ps_.is_scalar(key);
   }
 
   bool
@@ -309,6 +389,14 @@ namespace falaise {
   }
 
   bool
+  property_set::is_type_impl_(std::string const& key, quantity) const
+  {
+    // Quantity must be real, and have both explicit unit and unit symbol
+    return ps_.is_real(key) && ps_.has_explicit_unit(key) &&
+           ps_.has_unit_symbol(key) && ps_.is_scalar(key);
+  }
+
+  bool
   property_set::is_type_impl_(std::string const& key, std::vector<int>) const
   {
     return ps_.is_integer(key) && ps_.is_vector(key);
@@ -317,7 +405,9 @@ namespace falaise {
   bool
   property_set::is_type_impl_(std::string const& key, std::vector<double>) const
   {
-    return ps_.is_real(key) && ps_.is_vector(key);
+    // vector of doubles is always dimensionless
+    return ps_.is_real(key) && (!ps_.has_explicit_unit(key)) &&
+           (!ps_.has_unit_symbol(key)) && ps_.is_vector(key);
   }
 
   bool
@@ -346,6 +436,18 @@ namespace falaise {
   property_set::fetch_impl_(std::string const& key, falaise::path& result) const
   {
     result = falaise::path{ps_.fetch_path(key)};
+  }
+
+  // Full specialization for quantity type
+  template <>
+  void
+  property_set::fetch_impl_(std::string const& key,
+                            falaise::quantity& result) const
+  {
+    // construct using value, unit_symbol, and dimension?
+    // Need to think about where dimensions/unit are validated, or just store
+    // and check later on (e.g. in a config object, or via a converter)
+    result = {ps_.fetch_real_with_explicit_unit(key), ps_.get_unit_symbol(key)};
   }
 
 } /* falaise */
