@@ -102,7 +102,7 @@ TEST_CASE("Insertion/Erase interfaces work", "")
 TEST_CASE("Path type put/get specialization works", "")
 {
   falaise::property_set ps{};
-  
+
   SECTION("can only retrieve paths as paths")
   {
     falaise::path relpth{"relpath"};
@@ -131,16 +131,19 @@ TEST_CASE("Quantity type put/get specialization works", "")
 {
   falaise::property_set ps;
   ps.put("number", 3.14);
-  ps.put("quantity", falaise::quantity{4.13, "m/s2"});
+  ps.put("quantity", falaise::quantity{4.13, "m"});
 
   REQUIRE_THROWS_AS(ps.get<falaise::quantity>("number"), falaise::property_set::wrong_type_error);
   REQUIRE_THROWS_AS(ps.get<double>("quantity"), falaise::property_set::wrong_type_error);
 
   REQUIRE(ps.get<falaise::quantity>("quantity").value() == Approx(4.13));
-  REQUIRE(ps.get<falaise::quantity>("quantity").unit() == "m/s2");
+  REQUIRE(ps.get<falaise::quantity>("quantity").unit() == "m");
 
-  falaise::quantity x{3.14,"m/s2"};
-  REQUIRE(x.value() == Approx(3.14));
+  falaise::length_t q;
+  REQUIRE_NOTHROW(q = ps.get<falaise::quantity>("quantity"));
+  REQUIRE(q.value() == Approx(4.13));
+  REQUIRE(q.unit() == "m");
+  REQUIRE(q.dimension() == "length");
 }
 
 

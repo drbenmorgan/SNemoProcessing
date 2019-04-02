@@ -42,10 +42,10 @@ namespace falaise {
   }
 
   // Basic type for a quantity
-
   class quantity {
   public:
     using bad_unit_error = std::logic_error;
+    using bad_dimension_error = std::logic_error;
 
     quantity() = default;
     quantity(double value, std::string const& unit) : value_(value), unit_name(unit)
@@ -55,6 +55,8 @@ namespace falaise {
                              "'");
       }
     }
+
+    virtual ~quantity()=default;
 
     //! Convert quantity to double in underlying system of units scaling
     operator double() const { return value_ * unit_scale; }
@@ -72,7 +74,7 @@ namespace falaise {
     value_in(datatools::units::unit const& unit) const
     {
       if (unit.get_dimension_label() != dimension_name) {
-        throw bad_unit_error("different dimensions!!");
+        throw bad_dimension_error("different dimensions!!");
       }
 
       return value_ * unit_scale / unit;
@@ -96,6 +98,33 @@ namespace falaise {
     std::string dimension_name{"procedure_defined"};
     double unit_scale{1.0};
   };
+
+  // Very dumb dimensions from base value/unit holder, quantity
+  struct length {
+    static const std::string value;
+  };
+  const std::string length::value{"length"};
+
+  // Type for "explicit" dimensions
+  template <typename Dimension>
+  class quantity_t : public quantity {
+   public:
+    quantity_t()=default;
+
+    quantity_t(double value, std::string const& unit) : quantity(value, unit) {
+      if(Dimension::value != dimension()) {
+        throw bad_dimension_error("Dimension of unit '"+unit+"' is not '"+Dimension::value+"'");
+      }
+    }
+
+    quantity_t(quantity const& q) : quantity_t(q.value(), q.unit()) {}
+
+    virtual ~quantity_t()=default;
+  };
+
+  using length_t = quantity_t<length>;
+
+
 
   class property_set {
   public:
