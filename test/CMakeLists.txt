@@ -13,3 +13,10 @@ add_test(NAME property_set_t COMMAND property_set_t)
 add_executable(boost_units_t boost_units_t.cpp)
 target_link_libraries(boost_units_t FLCatch Boost::boost)
 add_test(NAME boost_units_t COMMAND boost_units_t)
+
+# - Units
+find_package(units REQUIRED)
+add_executable(units_t units_t.cpp)
+target_link_libraries(units_t PRIVATE FLCatch units::units)
+target_compile_features(units_t PRIVATE cxx_std_14)
+
