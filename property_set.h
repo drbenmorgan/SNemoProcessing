@@ -44,6 +44,9 @@ namespace falaise {
     return os;
   }
 
+
+
+
   // Basic type for a quantity
   class quantity {
   public:
@@ -103,6 +106,7 @@ namespace falaise {
     std::string dimension_name{""};
     double unit_scale{1.0};
   };
+
 
   // Type for "explicit" dimensions
   template <typename Dimension>
@@ -248,7 +252,7 @@ FALAISE_ADD_DIMENSION_TAG(wave_number)
 
   // electric_field
 
-  // 
+  //
 
 
 
@@ -322,7 +326,14 @@ FALAISE_ADD_DIMENSION_TAG(wave_number)
      * can_hold_<T>::value : true if T can be held, false otherwise
      */
     template <typename T>
-    using can_hold_ = typename boost::mpl::contains<types_, T>::type;
+    struct can_hold_ {
+      typedef typename boost::mpl::contains<types_, T>::type type;
+    };
+
+    template <typename T>
+    struct can_hold_<quantity_t<T>> {
+      typedef std::true_type type;
+    };
 
     //! Return true if value held at key has type T
     /*
@@ -364,10 +375,14 @@ FALAISE_ADD_DIMENSION_TAG(wave_number)
 
     //! Set result to value held at key
     /*
-     * Specialize this for any T requiring type conversion (e.g. path, quantity)
+     * Specialize/overload this for any T requiring type conversion (e.g. path, quantity)
      */
     template <typename T>
     void fetch_impl_(std::string const& key, T& result) const;
+
+    //! Overloaded fetch for explicitly dimensioned quantities
+    template <typename T>
+    void fetch_impl_(std::string const& key, quantity_t<T>& result) const;
 
     datatools::properties ps_; //! Wrapped instance of datatools::properties
   };
@@ -440,7 +455,7 @@ namespace falaise {
   void
   property_set::put(std::string const& key, T const& value)
   {
-    static_assert(can_hold_<T>::value,
+    static_assert(can_hold_<T>::type::value,
                   "property_set cannot hold values of type T");
     // Check directly to use our clearer exception type
     if (ps_.has_key(key)) {
@@ -462,7 +477,7 @@ namespace falaise {
     ps_.store_path(key, value);
   }
 
-  // Specialization for quantity type
+  // Specialization for quantity types, including quantity_t<T>s
   template <>
   void
   property_set::put(std::string const& key, quantity const& value)
@@ -481,7 +496,7 @@ namespace falaise {
   void
   property_set::put_or_replace(std::string const& key, T const& value)
   {
-    // Cannot update type of held data, so must/erase/re-store
+    // Cannot change type of already held data, so must erase/re-store
     erase(key);
     put(key, value);
   }
@@ -501,12 +516,12 @@ namespace falaise {
   bool
   property_set::is_type_(std::string const& key) const
   {
-    static_assert(can_hold_<T>::value,
+    static_assert(can_hold_<T>::type::value,
                   "property_set cannot hold values of type T");
     if (ps_.has_key(key)) {
       return is_type_impl_(key, T{});
     }
-    // Absence of key is false
+    // Absence of key is false (clearly cannot be T)
     return false;
   }
 
@@ -599,9 +614,15 @@ namespace falaise {
   property_set::fetch_impl_(std::string const& key,
                             falaise::quantity& result) const
   {
-    // construct using value, unit_symbol, and dimension?
-    // Need to think about where dimensions/unit are validated, or just store
-    // and check later on (e.g. in a config object, or via a converter)
+    result = {ps_.fetch_real_with_explicit_unit(key), ps_.get_unit_symbol(key)};
+  }
+
+  // Overload for explicitly dimensioned quantities
+  template <typename T>
+  void
+  property_set::fetch_impl_(std::string const& key,
+                            falaise::quantity_t<T>& result) const
+  {
     result = {ps_.fetch_real_with_explicit_unit(key), ps_.get_unit_symbol(key)};
   }
 

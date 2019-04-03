@@ -133,7 +133,7 @@ TEST_CASE("Quantity type put/get specialization works", "")
   ps.put("number", 3.14);
   ps.put("quantity", falaise::quantity{4.13, "m"});
   // TODO: Cannot put quantity_t<U> type yet
-  //ps.put("amass", falaise::mass_t{4.13, "m"});
+  ps.put("amass", falaise::mass_t{4.13, "kg"});
 
   REQUIRE_THROWS_AS( ps.get<falaise::quantity>("number"), falaise::property_set::wrong_type_error );
   REQUIRE_THROWS_AS( ps.get<double>("quantity"), falaise::property_set::wrong_type_error );
@@ -142,10 +142,11 @@ TEST_CASE("Quantity type put/get specialization works", "")
   REQUIRE( ps.get<falaise::quantity>("quantity").unit() == "m" );
 
   falaise::length_t q;
-  REQUIRE_NOTHROW(q = ps.get<falaise::quantity>("quantity"));
+  REQUIRE_NOTHROW(q = ps.get<falaise::length_t>("quantity"));
   REQUIRE( q.value() == Approx(4.13) );
   REQUIRE( q.unit() == "m" );
   REQUIRE( q.dimension() == "length");
+  REQUIRE( q == Approx(4.13*CLHEP::m) );
 
   //falaise::mass_t r {ps.get<falaise::quantity>("quantity")};
 }
