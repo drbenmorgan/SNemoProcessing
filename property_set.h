@@ -3,8 +3,11 @@
 
 #include "bayeux/datatools/properties.h"
 #include "bayeux/datatools/units.h"
+#include "boost/metaparse/string.hpp"
 #include "boost/mpl/contains.hpp"
+#include "boost/mpl/string.hpp"
 #include "boost/mpl/vector.hpp"
+
 
 namespace falaise {
   // Minimal type for paths enabling template specialization
@@ -58,17 +61,17 @@ namespace falaise {
 
     virtual ~quantity()=default;
 
-    //! Convert quantity to double in underlying system of units scaling
+    //! Convert quantity to value in the CLHEP::Units system
     operator double() const { return value_ * unit_scale; }
 
-    //! Return the concrete value for the quantity in its current units
+    //! Return the concrete value for the quantity in its units
     double
     value() const
     {
       return value_;
     }
 
-    //! Return value for the quantity, converted to supplied unit
+    //! Return value for the quantity in the given units
     //! \throws bad_unit_error if dimension if supplied unit is different to that of the quantity
     double
     value_in(datatools::units::unit const& unit) const
@@ -80,12 +83,14 @@ namespace falaise {
       return value_ * unit_scale / unit;
     }
 
+    //! Return string representation of the quantity's units
     std::string const&
     unit() const
     {
       return unit_name;
     }
 
+    //! Return string representation of the quantity's dimensions
     std::string const&
     dimension() const
     {
@@ -94,16 +99,10 @@ namespace falaise {
 
   private:
     double value_{0.0};
-    std::string unit_name{"pdu"};
-    std::string dimension_name{"procedure_defined"};
+    std::string unit_name{""};
+    std::string dimension_name{""};
     double unit_scale{1.0};
   };
-
-  // Very dumb dimensions from base value/unit holder, quantity
-  struct length {
-    static const std::string value;
-  };
-  const std::string length::value{"length"};
 
   // Type for "explicit" dimensions
   template <typename Dimension>
@@ -112,8 +111,8 @@ namespace falaise {
     quantity_t()=default;
 
     quantity_t(double value, std::string const& unit) : quantity(value, unit) {
-      if(Dimension::value != dimension()) {
-        throw bad_dimension_error("Dimension of unit '"+unit+"' is not '"+Dimension::value+"'");
+      if(boost::mpl::c_str<typename Dimension::label>::value != dimension()) {
+        throw bad_dimension_error("Dimension of unit '"+unit+"' is not '"+boost::mpl::c_str<typename Dimension::label>::value+"'");
       }
     }
 
@@ -122,7 +121,134 @@ namespace falaise {
     virtual ~quantity_t()=default;
   };
 
-  using length_t = quantity_t<length>;
+
+  // Follow nholthaus units and macro-ize the boiler plate
+  #define FALAISE_ADD_DIMENSION_TAG(name) \
+  struct name\
+  {\
+    typedef BOOST_METAPARSE_STRING(#name) label; \
+  };\
+  using name ## _t = ::falaise::quantity_t<name>;
+
+FALAISE_ADD_DIMENSION_TAG(absorbed_dose)
+FALAISE_ADD_DIMENSION_TAG(acceleration)
+FALAISE_ADD_DIMENSION_TAG(activity)
+FALAISE_ADD_DIMENSION_TAG(amount)
+FALAISE_ADD_DIMENSION_TAG(angle)
+FALAISE_ADD_DIMENSION_TAG(angular_frequency)
+FALAISE_ADD_DIMENSION_TAG(capacitance)
+FALAISE_ADD_DIMENSION_TAG(conductance)
+FALAISE_ADD_DIMENSION_TAG(conductivity)
+FALAISE_ADD_DIMENSION_TAG(cross_section)
+FALAISE_ADD_DIMENSION_TAG(data_storage)
+FALAISE_ADD_DIMENSION_TAG(data_transfer_rate)
+FALAISE_ADD_DIMENSION_TAG(density)
+FALAISE_ADD_DIMENSION_TAG(electric_charge)
+FALAISE_ADD_DIMENSION_TAG(electric_current)
+FALAISE_ADD_DIMENSION_TAG(electric_displacement_field)
+FALAISE_ADD_DIMENSION_TAG(electric_field)
+FALAISE_ADD_DIMENSION_TAG(electric_flux)
+FALAISE_ADD_DIMENSION_TAG(electric_potential)
+FALAISE_ADD_DIMENSION_TAG(electric_resistance)
+FALAISE_ADD_DIMENSION_TAG(electric_signal_integral)
+FALAISE_ADD_DIMENSION_TAG(energy)
+FALAISE_ADD_DIMENSION_TAG(equivalent_dose)
+FALAISE_ADD_DIMENSION_TAG(force)
+FALAISE_ADD_DIMENSION_TAG(fraction)
+FALAISE_ADD_DIMENSION_TAG(frequency)
+FALAISE_ADD_DIMENSION_TAG(illuminance)
+FALAISE_ADD_DIMENSION_TAG(inductance)
+FALAISE_ADD_DIMENSION_TAG(length)
+FALAISE_ADD_DIMENSION_TAG(level)
+FALAISE_ADD_DIMENSION_TAG(luminance)
+FALAISE_ADD_DIMENSION_TAG(luminous_energy)
+FALAISE_ADD_DIMENSION_TAG(luminous_energy_density)
+FALAISE_ADD_DIMENSION_TAG(luminous_exposure)
+FALAISE_ADD_DIMENSION_TAG(luminous_flux)
+FALAISE_ADD_DIMENSION_TAG(luminous_intensity)
+FALAISE_ADD_DIMENSION_TAG(magnetic_field_strength)
+FALAISE_ADD_DIMENSION_TAG(magnetic_flux)
+FALAISE_ADD_DIMENSION_TAG(magnetic_flux_density)
+FALAISE_ADD_DIMENSION_TAG(mass)
+FALAISE_ADD_DIMENSION_TAG(mass_activity)
+FALAISE_ADD_DIMENSION_TAG(permeability)
+FALAISE_ADD_DIMENSION_TAG(permittivity)
+FALAISE_ADD_DIMENSION_TAG(power)
+FALAISE_ADD_DIMENSION_TAG(pressure)
+FALAISE_ADD_DIMENSION_TAG(procedure_defined)
+FALAISE_ADD_DIMENSION_TAG(resistivity)
+FALAISE_ADD_DIMENSION_TAG(solid_angle)
+FALAISE_ADD_DIMENSION_TAG(surface)
+FALAISE_ADD_DIMENSION_TAG(surface_activity)
+FALAISE_ADD_DIMENSION_TAG(surface_density)
+FALAISE_ADD_DIMENSION_TAG(surface_tension)
+FALAISE_ADD_DIMENSION_TAG(temperature)
+FALAISE_ADD_DIMENSION_TAG(time)
+FALAISE_ADD_DIMENSION_TAG(velocity)
+FALAISE_ADD_DIMENSION_TAG(volume)
+FALAISE_ADD_DIMENSION_TAG(volume_activity)
+FALAISE_ADD_DIMENSION_TAG(wave_number)
+  // Mass
+
+  // Time
+
+  // electric_current
+
+  // temperature
+
+  // amount
+
+  // surface (Area)
+
+  // surface_density (Mass/Area)
+
+  // cross_section (synonym for Area, but requires units to be given in barns)
+
+  // volume
+
+  // angle
+
+  // solid_angle
+
+  // energy
+
+  // force
+
+  // pressure
+
+  // density
+
+  // frequency
+
+  // activity (e.g. Bequerel)
+
+  // volume_activity
+
+  // surface_activity
+
+  // mass_activity
+
+  // fraction
+
+  // velocity
+
+  // acceleration
+
+  // electric_charge
+
+  // electric_potential
+
+  // electric_resistance
+
+  // resistivity
+
+  // power
+
+  // capacitance
+
+  // electric_field
+
+  // 
 
 
 
