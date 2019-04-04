@@ -9,5 +9,9 @@ if(Falaise_FOUND)
   target_link_libraries(MockTrackerCalibrator Falaise::FalaiseModule)
 endif()
 
+add_library(MockFalaise SHARED property_set.h property_set.cpp)
+target_include_directories(MockFalaise PUBLIC ${PROJECT_SOURCE_DIR})
+target_link_libraries(MockFalaise PUBLIC Falaise::Falaise)
+
 enable_testing()
 add_subdirectory(test)

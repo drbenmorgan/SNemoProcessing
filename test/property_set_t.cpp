@@ -4,6 +4,7 @@
 
 #include "bayeux/datatools/units.h"
 #include "bayeux/datatools/clhep_units.h"
+#include <cstdio>
 
 // - Fixtures and helpers
 datatools::properties
@@ -17,18 +18,6 @@ makeSampleProperties()
   test.store_path("apath", "foobar");
   return test;
 }
-
-// Identified requirement: Need equivalent of ParameterSet's string/hash ops
-// Equivalent to requirement of needing an equality operator!
-// So also need an equivalence operator for comparing ps to props
-//
-// std::string
-// to_string(falaise::property_set const& ps) {
-//  datatools::properties tmp = ps;
-//  std::ostringstream cv;
-//  tmp.to_string(cv);
-//  return cv.str();
-//}
 
 TEST_CASE("property_set default construction works", "")
 {
@@ -131,24 +120,46 @@ TEST_CASE("Quantity type put/get specialization works", "")
 {
   falaise::property_set ps;
   ps.put("number", 3.14);
-  ps.put("quantity", falaise::quantity{4.13, "m"});
+  ps.put("quantity", falaise::units::quantity{4.13, "m"});
   // TODO: Cannot put quantity_t<U> type yet
-  ps.put("amass", falaise::mass_t{4.13, "kg"});
+  ps.put("amass", falaise::units::mass_t{4.13, "kg"});
 
-  REQUIRE_THROWS_AS( ps.get<falaise::quantity>("number"), falaise::wrong_type_error );
+  REQUIRE_THROWS_AS( ps.get<falaise::units::quantity>("number"), falaise::wrong_type_error );
   REQUIRE_THROWS_AS( ps.get<double>("quantity"), falaise::wrong_type_error );
 
-  REQUIRE( ps.get<falaise::quantity>("quantity").value() == Approx(4.13) );
-  REQUIRE( ps.get<falaise::quantity>("quantity").unit() == "m" );
+  REQUIRE( ps.get<falaise::units::quantity>("quantity").value() == Approx(4.13) );
+  REQUIRE( ps.get<falaise::units::quantity>("quantity").unit() == "m" );
 
-  falaise::length_t q;
-  REQUIRE_NOTHROW(q = ps.get<falaise::length_t>("quantity"));
+  falaise::units::length_t q;
+  REQUIRE_NOTHROW(q = ps.get<falaise::units::length_t>("quantity"));
   REQUIRE( q.value() == Approx(4.13) );
   REQUIRE( q.unit() == "m" );
   REQUIRE( q.dimension() == "length");
   REQUIRE( q == Approx(4.13*CLHEP::m) );
 
   //falaise::mass_t r {ps.get<falaise::quantity>("quantity")};
+}
+
+TEST_CASE("Creation from file works","")
+{
+  std::string fname{"kakhjbfdkb.conf"};
+  datatools::properties tmp{makeSampleProperties()};
+  datatools::properties::write_config(fname, tmp);
+
+  falaise::property_set ps;
+  REQUIRE_NOTHROW( make_property_set(fname, ps) );
+  REQUIRE(!ps.is_empty());
+
+  auto names = ps.get_names();
+  REQUIRE(names.size() == 5);
+
+  for (auto& n : names) {
+    REQUIRE(ps.has_key(n));
+  }
+
+  std::cout << ps.to_string() << std::endl;  
+
+  remove(fname.c_str());
 }
 
 

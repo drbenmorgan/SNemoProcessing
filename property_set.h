@@ -9,17 +9,40 @@
 #include "boost/mpl/vector.hpp"
 
 namespace falaise {
-  // Minimal type for paths enabling template specialization
-  // Need to check what comes out of properties parsing to see if further
-  // expansion is needed...
-  // Can probably do the same for quantities
+  //! Class representing a property_set filesystem path
+  /*
+   * Filesystem paths can be defined in datatools::properties syntax as:
+   *
+   *   mypath : string as path = "/some/path"
+   *
+   * Parsing of the properties file will expand any mount points or environment
+   * variables so that fetching the path will return a std::string containing
+   * the absolute path.
+   *
+   * @ref path provides a simple type to distinguish raw std::string from
+   * explicit paths. It wraps the std::string for the absolute path. @ref
+   * falaise::property_set supports get/put of `path`s, validating the needed
+   * attributes for retrieval or storage.
+   */
   class path {
   public:
+    //! Default constructor
     path() = default;
+
+    //! Construct path from a std::string
+    /*
+     * Not declared explicit as we allow conversions for compatibility with
+     * existing use of filesystem paths as std::string
+     */
     path(std::string const& p) : value(p) {}
 
+    //! Conversion to std::string
     operator std::string() const { return value; }
 
+    //! Compare path with another
+    /*
+     * \returns true if the two operands are the same
+     */
     bool
     operator==(path const& other) const
     {
@@ -27,15 +50,29 @@ namespace falaise {
     }
 
     bool
+    operator!=(path const& other) const
+    {
+      return !(*this == other);
+    }
+
+    //! Compare path with a string
+    bool
     operator==(std::string const& other) const
     {
       return value == other;
     }
 
+    bool
+    operator!=(std::string const& other) const
+    {
+      return !(*this == other);
+    }
+
   private:
-    std::string value;
+    std::string value; //< absolute path value
   };
 
+  //! Output path to an ostream
   std::ostream&
   operator<<(std::ostream& os, path const& p)
   {
@@ -43,234 +80,215 @@ namespace falaise {
     return os;
   }
 
-  // Basic type for a quantity
-  class wrong_dimension_error : public std::logic_error {
-    using std::logic_error::logic_error;
-  };
+  // -- QUANTITY
+  namespace units {
 
-  class unknown_unit_error : public std::logic_error {
-    using std::logic_error::logic_error;
-  };
+    //! Exception for wrong dimensions
+    class wrong_dimension_error : public std::logic_error {
+      using std::logic_error::logic_error;
+    };
 
-  class quantity {
-  public:
-    quantity() = default;
-    quantity(double value, std::string const& unit)
-      : value_(value), unit_name(unit)
-    {
-      if (!datatools::units::find_unit(unit_name, unit_scale, dimension_name)) {
-        throw unknown_unit_error{"unit '" + unit_name + "' is unknown"};
-      }
-    }
+    //! Exception for unknown units
+    class unknown_unit_error : public std::logic_error {
+      using std::logic_error::logic_error;
+    };
 
-    virtual ~quantity() = default;
+    //! Class representing a physical measurement
+    /*
+     *
+     */
+    class quantity {
+    public:
+      //! Default constructor
+      quantity() = default;
 
-    //! Convert quantity to value in the CLHEP::Units system
-    operator double() const { return value_ * unit_scale; }
-
-    //! Return the concrete value for the quantity in its units
-    double
-    value() const
-    {
-      return value_;
-    }
-
-    //! Return value for the quantity in the given units
-    //! \throws bad_unit_error if dimension if supplied unit is different to
-    //! that of the quantity
-    double
-    value_in(datatools::units::unit const& unit) const
-    {
-      if (unit.get_dimension_label() != dimension_name) {
-        throw wrong_dimension_error("input unit dimension '" + unit.get_dimension_label() + "' != '" + dimension_name + "'");
+      //! Construct a quantity
+      /*
+       * \param value Numeric value
+       * \param unit Datatools::units tag
+       * \throw falaise::unknown_unit_error if unit is not supported by
+       * datatools::units
+       */
+      quantity(double value, std::string const& unit)
+        : value_(value), unit_name(unit)
+      {
+        if (!datatools::units::find_unit(
+              unit_name, unit_scale, dimension_name)) {
+          throw unknown_unit_error{"unit '" + unit_name + "' is unknown"};
+        }
       }
 
-      return value_ * unit_scale / unit;
-    }
+      virtual ~quantity() = default;
 
-    //! Return string representation of the quantity's units
-    std::string const&
-    unit() const
-    {
-      return unit_name;
-    }
+      //! Convert quantity to value in the CLHEP::Units system
+      /*
+       * \returns quantity's value in the CLHEP numeric units
+       */
+      operator double() const { return value_ * unit_scale; }
 
-    //! Return string representation of the quantity's dimensions
-    std::string const&
-    dimension() const
-    {
-      return dimension_name;
-    }
-
-  private:
-    double value_{0.0};
-    std::string unit_name{""};
-    std::string dimension_name{""};
-    double unit_scale{1.0};
-  };
-
-  // Type for "explicit" dimensions
-  template <typename Dimension>
-  class quantity_t : public quantity {
-  public:
-    quantity_t() = default;
-
-    quantity_t(double value, std::string const& unit) : quantity(value, unit)
-    {
-      if (boost::mpl::c_str<typename Dimension::label>::value != dimension()) {
-        throw wrong_dimension_error(
-          "dimension of unit '" + unit + "' is not '" +
-          boost::mpl::c_str<typename Dimension::label>::value + "'");
+      //! Return the value for the quantity in its units
+      /*
+       * For example:
+       *
+       */
+      double
+      value() const
+      {
+        return value_;
       }
-    }
 
-    quantity_t(quantity const& q) : quantity_t(q.value(), q.unit()) {}
+      //! Return value in CLHEP::Units unit
+      /*
+       * \throws bad_unit_error if supplied unit's dimension is different to
+       * that of the quantity
+       */
+      double
+      value_in(datatools::units::unit const& unit) const
+      {
+        if (unit.get_dimension_label() != dimension_name) {
+          throw wrong_dimension_error("input unit dimension '" +
+                                      unit.get_dimension_label() + "' != '" +
+                                      dimension_name + "'");
+        }
 
-    virtual ~quantity_t() = default;
-  };
+        return value_ * unit_scale / unit;
+      }
+
+      //! Return datatools::units tag of the quantity's unit
+      std::string const&
+      unit() const
+      {
+        return unit_name;
+      }
+
+      //! Return datatools::units tag of the quantity's dimension
+      std::string const&
+      dimension() const
+      {
+        return dimension_name;
+      }
+
+    private:
+      double value_{0.0};
+      std::string unit_name{""};
+      std::string dimension_name{""};
+      double unit_scale{1.0};
+    };
+
+    //! Type for "explicit" dimensions
+    /*
+     *
+     */
+    template <typename Dimension>
+    class quantity_t : public quantity {
+    public:
+      quantity_t() = default;
+
+      quantity_t(double value, std::string const& unit) : quantity(value, unit)
+      {
+        if (boost::mpl::c_str<typename Dimension::label>::value !=
+            dimension()) {
+          throw wrong_dimension_error(
+            "dimension of unit '" + unit + "' is not '" +
+            boost::mpl::c_str<typename Dimension::label>::value + "'");
+        }
+      }
+
+      quantity_t(quantity const& q) : quantity_t(q.value(), q.unit()) {}
+
+      virtual ~quantity_t() = default;
+    };
 
 // Follow nholthaus units and macro-ize the boiler plate
 #define FALAISE_ADD_DIMENSION_TAG(name)                                        \
   struct name {                                                                \
     typedef BOOST_METAPARSE_STRING(#name) label;                               \
   };                                                                           \
-  using name##_t = ::falaise::quantity_t<name>;
+  using name##_t = ::falaise::units::quantity_t<name>;
 
-  FALAISE_ADD_DIMENSION_TAG(absorbed_dose)
-  FALAISE_ADD_DIMENSION_TAG(acceleration)
-  FALAISE_ADD_DIMENSION_TAG(activity)
-  FALAISE_ADD_DIMENSION_TAG(amount)
-  FALAISE_ADD_DIMENSION_TAG(angle)
-  FALAISE_ADD_DIMENSION_TAG(angular_frequency)
-  FALAISE_ADD_DIMENSION_TAG(capacitance)
-  FALAISE_ADD_DIMENSION_TAG(conductance)
-  FALAISE_ADD_DIMENSION_TAG(conductivity)
-  FALAISE_ADD_DIMENSION_TAG(cross_section)
-  FALAISE_ADD_DIMENSION_TAG(data_storage)
-  FALAISE_ADD_DIMENSION_TAG(data_transfer_rate)
-  FALAISE_ADD_DIMENSION_TAG(density)
-  FALAISE_ADD_DIMENSION_TAG(electric_charge)
-  FALAISE_ADD_DIMENSION_TAG(electric_current)
-  FALAISE_ADD_DIMENSION_TAG(electric_displacement_field)
-  FALAISE_ADD_DIMENSION_TAG(electric_field)
-  FALAISE_ADD_DIMENSION_TAG(electric_flux)
-  FALAISE_ADD_DIMENSION_TAG(electric_potential)
-  FALAISE_ADD_DIMENSION_TAG(electric_resistance)
-  FALAISE_ADD_DIMENSION_TAG(electric_signal_integral)
-  FALAISE_ADD_DIMENSION_TAG(energy)
-  FALAISE_ADD_DIMENSION_TAG(equivalent_dose)
-  FALAISE_ADD_DIMENSION_TAG(force)
-  FALAISE_ADD_DIMENSION_TAG(fraction)
-  FALAISE_ADD_DIMENSION_TAG(frequency)
-  FALAISE_ADD_DIMENSION_TAG(illuminance)
-  FALAISE_ADD_DIMENSION_TAG(inductance)
-  FALAISE_ADD_DIMENSION_TAG(length)
-  FALAISE_ADD_DIMENSION_TAG(level)
-  FALAISE_ADD_DIMENSION_TAG(luminance)
-  FALAISE_ADD_DIMENSION_TAG(luminous_energy)
-  FALAISE_ADD_DIMENSION_TAG(luminous_energy_density)
-  FALAISE_ADD_DIMENSION_TAG(luminous_exposure)
-  FALAISE_ADD_DIMENSION_TAG(luminous_flux)
-  FALAISE_ADD_DIMENSION_TAG(luminous_intensity)
-  FALAISE_ADD_DIMENSION_TAG(magnetic_field_strength)
-  FALAISE_ADD_DIMENSION_TAG(magnetic_flux)
-  FALAISE_ADD_DIMENSION_TAG(magnetic_flux_density)
-  FALAISE_ADD_DIMENSION_TAG(mass)
-  FALAISE_ADD_DIMENSION_TAG(mass_activity)
-  FALAISE_ADD_DIMENSION_TAG(permeability)
-  FALAISE_ADD_DIMENSION_TAG(permittivity)
-  FALAISE_ADD_DIMENSION_TAG(power)
-  FALAISE_ADD_DIMENSION_TAG(pressure)
-  FALAISE_ADD_DIMENSION_TAG(procedure_defined)
-  FALAISE_ADD_DIMENSION_TAG(resistivity)
-  FALAISE_ADD_DIMENSION_TAG(solid_angle)
-  FALAISE_ADD_DIMENSION_TAG(surface)
-  FALAISE_ADD_DIMENSION_TAG(surface_activity)
-  FALAISE_ADD_DIMENSION_TAG(surface_density)
-  FALAISE_ADD_DIMENSION_TAG(surface_tension)
-  FALAISE_ADD_DIMENSION_TAG(temperature)
-  FALAISE_ADD_DIMENSION_TAG(time)
-  FALAISE_ADD_DIMENSION_TAG(velocity)
-  FALAISE_ADD_DIMENSION_TAG(volume)
-  FALAISE_ADD_DIMENSION_TAG(volume_activity)
-  FALAISE_ADD_DIMENSION_TAG(wave_number)
-  // Mass
+    FALAISE_ADD_DIMENSION_TAG(absorbed_dose)
+    FALAISE_ADD_DIMENSION_TAG(acceleration)
+    FALAISE_ADD_DIMENSION_TAG(activity)
+    FALAISE_ADD_DIMENSION_TAG(amount)
+    FALAISE_ADD_DIMENSION_TAG(angle)
+    FALAISE_ADD_DIMENSION_TAG(angular_frequency)
+    FALAISE_ADD_DIMENSION_TAG(capacitance)
+    FALAISE_ADD_DIMENSION_TAG(conductance)
+    FALAISE_ADD_DIMENSION_TAG(conductivity)
+    FALAISE_ADD_DIMENSION_TAG(cross_section)
+    FALAISE_ADD_DIMENSION_TAG(data_storage)
+    FALAISE_ADD_DIMENSION_TAG(data_transfer_rate)
+    FALAISE_ADD_DIMENSION_TAG(density)
+    FALAISE_ADD_DIMENSION_TAG(electric_charge)
+    FALAISE_ADD_DIMENSION_TAG(electric_current)
+    FALAISE_ADD_DIMENSION_TAG(electric_displacement_field)
+    FALAISE_ADD_DIMENSION_TAG(electric_field)
+    FALAISE_ADD_DIMENSION_TAG(electric_flux)
+    FALAISE_ADD_DIMENSION_TAG(electric_potential)
+    FALAISE_ADD_DIMENSION_TAG(electric_resistance)
+    FALAISE_ADD_DIMENSION_TAG(electric_signal_integral)
+    FALAISE_ADD_DIMENSION_TAG(energy)
+    FALAISE_ADD_DIMENSION_TAG(equivalent_dose)
+    FALAISE_ADD_DIMENSION_TAG(force)
+    FALAISE_ADD_DIMENSION_TAG(fraction)
+    FALAISE_ADD_DIMENSION_TAG(frequency)
+    FALAISE_ADD_DIMENSION_TAG(illuminance)
+    FALAISE_ADD_DIMENSION_TAG(inductance)
+    FALAISE_ADD_DIMENSION_TAG(length)
+    FALAISE_ADD_DIMENSION_TAG(level)
+    FALAISE_ADD_DIMENSION_TAG(luminance)
+    FALAISE_ADD_DIMENSION_TAG(luminous_energy)
+    FALAISE_ADD_DIMENSION_TAG(luminous_energy_density)
+    FALAISE_ADD_DIMENSION_TAG(luminous_exposure)
+    FALAISE_ADD_DIMENSION_TAG(luminous_flux)
+    FALAISE_ADD_DIMENSION_TAG(luminous_intensity)
+    FALAISE_ADD_DIMENSION_TAG(magnetic_field_strength)
+    FALAISE_ADD_DIMENSION_TAG(magnetic_flux)
+    FALAISE_ADD_DIMENSION_TAG(magnetic_flux_density)
+    FALAISE_ADD_DIMENSION_TAG(mass)
+    FALAISE_ADD_DIMENSION_TAG(mass_activity)
+    FALAISE_ADD_DIMENSION_TAG(permeability)
+    FALAISE_ADD_DIMENSION_TAG(permittivity)
+    FALAISE_ADD_DIMENSION_TAG(power)
+    FALAISE_ADD_DIMENSION_TAG(pressure)
+    FALAISE_ADD_DIMENSION_TAG(procedure_defined)
+    FALAISE_ADD_DIMENSION_TAG(resistivity)
+    FALAISE_ADD_DIMENSION_TAG(solid_angle)
+    FALAISE_ADD_DIMENSION_TAG(surface)
+    FALAISE_ADD_DIMENSION_TAG(surface_activity)
+    FALAISE_ADD_DIMENSION_TAG(surface_density)
+    FALAISE_ADD_DIMENSION_TAG(surface_tension)
+    FALAISE_ADD_DIMENSION_TAG(temperature)
+    FALAISE_ADD_DIMENSION_TAG(time)
+    FALAISE_ADD_DIMENSION_TAG(velocity)
+    FALAISE_ADD_DIMENSION_TAG(volume)
+    FALAISE_ADD_DIMENSION_TAG(volume_activity)
+    FALAISE_ADD_DIMENSION_TAG(wave_number)
+  } /* units */
 
-  // Time
-
-  // electric_current
-
-  // temperature
-
-  // amount
-
-  // surface (Area)
-
-  // surface_density (Mass/Area)
-
-  // cross_section (synonym for Area, but requires units to be given in barns)
-
-  // volume
-
-  // angle
-
-  // solid_angle
-
-  // energy
-
-  // force
-
-  // pressure
-
-  // density
-
-  // frequency
-
-  // activity (e.g. Bequerel)
-
-  // volume_activity
-
-  // surface_activity
-
-  // mass_activity
-
-  // fraction
-
-  // velocity
-
-  // acceleration
-
-  // electric_charge
-
-  // electric_potential
-
-  // electric_resistance
-
-  // resistivity
-
-  // power
-
-  // capacitance
-
-  // electric_field
-
-  //
+  // -- PROPERTY_SET
 
   //! Exception thrown when requesting a key that is not in the property_set
-  class missing_key_error : public std::logic_error{
+  class missing_key_error : public std::logic_error {
     using std::logic_error::logic_error;
   };
 
   //! Exception thrown when trying to put to a key already in the property_set
-  class existing_key_error : public std::logic_error{
+  class existing_key_error : public std::logic_error {
     using std::logic_error::logic_error;
   };
 
-  //! Exception thrown when type requested in get<T>(key) does not match that of value at key
-  class wrong_type_error : public std::logic_error{
+  //! Exception thrown when type requested in get<T>(key) does not match that of
+  //! value at key
+  class wrong_type_error : public std::logic_error {
     using std::logic_error::logic_error;
   };
 
+  //! Class holding a set of key-value properties
+  /*
+   *  Provides a convenient adaptor interface over datatools::properties,
+   * targeted at developers of modules for Falaise
+   */
   class property_set {
   public:
     //! Default constructor
@@ -278,7 +296,7 @@ namespace falaise {
 
     //! Construct from an existing datatools::properties
     /*
-     * Takes a copy of the input instance
+     *  \param[in] ps properties
      */
     property_set(datatools::properties const& ps);
 
@@ -286,7 +304,7 @@ namespace falaise {
     //! Returns true if no key-value pairs are held
     bool is_empty() const;
 
-    //! Returns a list of all keys in the property_set
+    //! Returns a vector of all keys in the property_set
     std::vector<std::string> get_names() const;
 
     //! Returns true if the property_set contains a pair with the supplied key
@@ -297,6 +315,12 @@ namespace falaise {
 
     // - Retrievers
     //! Return the value of type T associated with supplied key
+    /*
+     * \tparam T type to be returned
+     * \param[in] key key of value to be returned
+     * \throw missing_key_error if key is not held
+     * \throw wrong_type_error if value at key is not T
+     */
     template <typename T>
     T get(std::string const& key) const;
 
@@ -304,7 +328,7 @@ namespace falaise {
     // not present
     template <typename T>
     T get(std::string const& key, T const& default_value) const;
-   
+
     //! Convert back to datatools::properties
     operator datatools::properties() const;
 
@@ -323,24 +347,24 @@ namespace falaise {
     bool erase(std::string const& key);
 
   private:
-    //! List of types that property_set can hold
+    //! \typedef List of types that property_set can hold
     using types_ = boost::mpl::vector<int,
                                       double,
                                       bool,
                                       std::string,
                                       path,
-                                      quantity,
+                                      units::quantity,
                                       std::vector<int>,
                                       std::vector<double>,
                                       std::vector<bool>,
                                       std::vector<std::string>>;
-   template <typename T>
+    template <typename T>
     struct can_hold_ {
       typedef typename boost::mpl::contains<types_, T>::type type;
     };
 
     template <typename T>
-    struct can_hold_<quantity_t<T>> {
+    struct can_hold_<units::quantity_t<T>> {
       typedef std::true_type type;
     };
 
@@ -375,12 +399,13 @@ namespace falaise {
     bool is_type_impl_(std::string const& key, path) const;
 
     //! Return true if value at key is a falaise::quantity
-    bool is_type_impl_(std::string const& key, quantity) const;
+    bool is_type_impl_(std::string const& key, units::quantity) const;
 
     //! Return true if value at key is a std::vector<int>
     bool is_type_impl_(std::string const& key, std::vector<int>) const;
 
-    //! Return true if value at key is a std::vector<double> (dimensionless doubles)
+    //! Return true if value at key is a std::vector<double> (dimensionless
+    //! doubles)
     bool is_type_impl_(std::string const& key, std::vector<double>) const;
 
     //! Return true if value at key is a std::vector<bool>
@@ -398,43 +423,14 @@ namespace falaise {
 
     //! Overloaded fetch_impl_ for explicitly dimensioned quantities
     template <typename T>
-    void fetch_impl_(std::string const& key, quantity_t<T>& result) const;
+    void fetch_impl_(std::string const& key, units::quantity_t<T>& result) const;
 
-    datatools::properties ps_; //! Wrapped instance of datatools::properties
+    datatools::properties ps_; //< underlying set of properties
   };
 } /* falaise */
 
 namespace falaise {
-  property_set::property_set(datatools::properties const& ps) : ps_(ps) {}
-
-  property_set::operator datatools::properties() const { return ps_; }
-
-  bool
-  property_set::is_empty() const
-  {
-    return ps_.empty();
-  }
-
-  std::vector<std::string>
-  property_set::get_names() const
-  {
-    return ps_.keys();
-  }
-
-  bool
-  property_set::has_key(std::string const& key) const
-  {
-    return ps_.has_key(key);
-  }
-
-  std::string
-  property_set::to_string() const
-  {
-    std::ostringstream oss;
-    ps_.tree_dump(oss);
-    return oss.str();
-  }
-
+  
   template <typename T>
   T
   property_set::get(std::string const& key) const
@@ -495,7 +491,7 @@ namespace falaise {
   // Specialization for quantity types, including quantity_t<T>s
   template <>
   void
-  property_set::put(std::string const& key, quantity const& value)
+  property_set::put(std::string const& key, units::quantity const& value)
   {
     // Check directly to use our clearer exception type
     if (ps_.has_key(key)) {
@@ -516,17 +512,6 @@ namespace falaise {
     put(key, value);
   }
 
-  bool
-  property_set::erase(std::string const& key)
-  {
-    // Check first to avoid exception from erase() of properties
-    if (ps_.has_key(key)) {
-      ps_.erase(key);
-      return true;
-    }
-    return false;
-  }
-
   template <typename T>
   bool
   property_set::is_type_(std::string const& key) const
@@ -540,74 +525,7 @@ namespace falaise {
     return false;
   }
 
-  bool
-  property_set::is_type_impl_(std::string const& key, int) const
-  {
-    return ps_.is_integer(key) && ps_.is_scalar(key);
-  }
-
-  bool
-  property_set::is_type_impl_(std::string const& key, double) const
-  {
-    // Request for raw double implies a dimensionless number is wanted
-    return ps_.is_real(key) && (!ps_.has_explicit_unit(key)) &&
-           (!ps_.has_unit_symbol(key)) && ps_.is_scalar(key);
-  }
-
-  bool
-  property_set::is_type_impl_(std::string const& key, bool) const
-  {
-    return ps_.is_boolean(key) && ps_.is_scalar(key);
-  }
-
-  bool
-  property_set::is_type_impl_(std::string const& key, std::string) const
-  {
-    // Request for raw string implies a non-path type string is wanted
-    return ps_.is_string(key) && (!ps_.is_explicit_path(key)) &&
-           ps_.is_scalar(key);
-  }
-
-  bool
-  property_set::is_type_impl_(std::string const& key, path) const
-  {
-    return ps_.is_explicit_path(key) && ps_.is_scalar(key);
-  }
-
-  bool
-  property_set::is_type_impl_(std::string const& key, quantity) const
-  {
-    // Quantity must be real, and have explicit unit *and* unit symbol
-    return ps_.is_real(key) && ps_.has_explicit_unit(key) &&
-           ps_.has_unit_symbol(key) && ps_.is_scalar(key);
-  }
-
-  bool
-  property_set::is_type_impl_(std::string const& key, std::vector<int>) const
-  {
-    return ps_.is_integer(key) && ps_.is_vector(key);
-  }
-
-  bool
-  property_set::is_type_impl_(std::string const& key, std::vector<double>) const
-  {
-    // vector of raw doubles is always dimensionless
-    return ps_.is_real(key) && (!ps_.has_explicit_unit(key)) &&
-           (!ps_.has_unit_symbol(key)) && ps_.is_vector(key);
-  }
-
-  bool
-  property_set::is_type_impl_(std::string const& key, std::vector<bool>) const
-  {
-    return ps_.is_boolean(key) && ps_.is_vector(key);
-  }
-
-  bool
-  property_set::is_type_impl_(std::string const& key,
-                              std::vector<std::string>) const
-  {
-    return ps_.is_string(key) && ps_.is_vector(key);
-  }
+  
 
   template <typename T>
   void
@@ -619,7 +537,7 @@ namespace falaise {
   // Full specialization for path type
   template <>
   void
-  property_set::fetch_impl_(std::string const& key, falaise::path& result) const
+  property_set::fetch_impl_(std::string const& key, path& result) const
   {
     result = falaise::path{ps_.fetch_path(key)};
   }
@@ -628,7 +546,7 @@ namespace falaise {
   template <>
   void
   property_set::fetch_impl_(std::string const& key,
-                            falaise::quantity& result) const
+                            units::quantity& result) const
   {
     result = {ps_.fetch_real_with_explicit_unit(key), ps_.get_unit_symbol(key)};
   }
@@ -637,11 +555,18 @@ namespace falaise {
   template <typename T>
   void
   property_set::fetch_impl_(std::string const& key,
-                            falaise::quantity_t<T>& result) const
+                            units::quantity_t<T>& result) const
   {
     result = {ps_.fetch_real_with_explicit_unit(key), ps_.get_unit_symbol(key)};
   }
 
+  //! Construct a property_set from an input datatools::properties file
+  /*
+   * \param filename File from which to read data
+   * \param ps property_set to fill with data
+   */
+  void
+  make_property_set(const std::string& filename, property_set& ps);
 } /* falaise */
 
 #endif // FALAISE_PROPERTY_SET_H
