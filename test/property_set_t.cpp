@@ -63,7 +63,7 @@ TEST_CASE("Retriever interfaces work", "")
   REQUIRE(ps.get<int>("off", 42) == 42);
 
   REQUIRE_THROWS_AS(ps.get<falaise::path>("flatstring"),
-                    falaise::property_set::wrong_type_error);
+                    falaise::wrong_type_error);
   REQUIRE_NOTHROW(ps.get<falaise::path>("apath"));
 }
 
@@ -75,7 +75,7 @@ TEST_CASE("Insertion/Erase interfaces work", "")
   SECTION("putting the same key throws existing_key_error")
   {
     REQUIRE_THROWS_AS(ps.put("foo", 1),
-                      falaise::property_set::existing_key_error);
+                      falaise::existing_key_error);
   }
 
   SECTION("replacing an existing key/value works")
@@ -93,9 +93,9 @@ TEST_CASE("Insertion/Erase interfaces work", "")
     ps.put("avector", std::vector<int>{1, 2, 3, 4});
 
     REQUIRE_THROWS_AS(ps.get<std::vector<int>>("ascalar"),
-                      falaise::property_set::wrong_type_error);
+                      falaise::wrong_type_error);
     REQUIRE_THROWS_AS(ps.get<int>("avector"),
-                      falaise::property_set::wrong_type_error);
+                      falaise::wrong_type_error);
   }
 }
 
@@ -112,10 +112,10 @@ TEST_CASE("Path type put/get specialization works", "")
     ps.put("my_abspath", abspth);
 
     REQUIRE(ps.get<falaise::path>("my_relpath") == relpth);
-    REQUIRE_THROWS_AS(ps.get<std::string>("my_relpath"), falaise::property_set::wrong_type_error);
+    REQUIRE_THROWS_AS(ps.get<std::string>("my_relpath"), falaise::wrong_type_error);
 
     REQUIRE(ps.get<falaise::path>("my_abspath") == abspth);
-    REQUIRE_THROWS_AS(ps.get<std::string>("my_abspath"), falaise::property_set::wrong_type_error);
+    REQUIRE_THROWS_AS(ps.get<std::string>("my_abspath"), falaise::wrong_type_error);
   }
 
   SECTION("env vars are expanded on get")
@@ -135,8 +135,8 @@ TEST_CASE("Quantity type put/get specialization works", "")
   // TODO: Cannot put quantity_t<U> type yet
   ps.put("amass", falaise::mass_t{4.13, "kg"});
 
-  REQUIRE_THROWS_AS( ps.get<falaise::quantity>("number"), falaise::property_set::wrong_type_error );
-  REQUIRE_THROWS_AS( ps.get<double>("quantity"), falaise::property_set::wrong_type_error );
+  REQUIRE_THROWS_AS( ps.get<falaise::quantity>("number"), falaise::wrong_type_error );
+  REQUIRE_THROWS_AS( ps.get<double>("quantity"), falaise::wrong_type_error );
 
   REQUIRE( ps.get<falaise::quantity>("quantity").value() == Approx(4.13) );
   REQUIRE( ps.get<falaise::quantity>("quantity").unit() == "m" );

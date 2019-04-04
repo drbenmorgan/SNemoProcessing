@@ -8,7 +8,6 @@
 #include "boost/mpl/string.hpp"
 #include "boost/mpl/vector.hpp"
 
-
 namespace falaise {
   // Minimal type for paths enabling template specialization
   // Need to check what comes out of properties parsing to see if further
@@ -44,25 +43,27 @@ namespace falaise {
     return os;
   }
 
-
-
-
   // Basic type for a quantity
+  class wrong_dimension_error : public std::logic_error {
+    using std::logic_error::logic_error;
+  };
+
+  class unknown_unit_error : public std::logic_error {
+    using std::logic_error::logic_error;
+  };
+
   class quantity {
   public:
-    using bad_unit_error = std::logic_error;
-    using bad_dimension_error = std::logic_error;
-
     quantity() = default;
-    quantity(double value, std::string const& unit) : value_(value), unit_name(unit)
+    quantity(double value, std::string const& unit)
+      : value_(value), unit_name(unit)
     {
       if (!datatools::units::find_unit(unit_name, unit_scale, dimension_name)) {
-        throw bad_unit_error("no dimensional information for unit '" + unit_name +
-                             "'");
+        throw unknown_unit_error{"unit '" + unit_name + "' is unknown"};
       }
     }
 
-    virtual ~quantity()=default;
+    virtual ~quantity() = default;
 
     //! Convert quantity to value in the CLHEP::Units system
     operator double() const { return value_ * unit_scale; }
@@ -75,12 +76,13 @@ namespace falaise {
     }
 
     //! Return value for the quantity in the given units
-    //! \throws bad_unit_error if dimension if supplied unit is different to that of the quantity
+    //! \throws bad_unit_error if dimension if supplied unit is different to
+    //! that of the quantity
     double
     value_in(datatools::units::unit const& unit) const
     {
       if (unit.get_dimension_label() != dimension_name) {
-        throw bad_dimension_error("different dimensions!!");
+        throw wrong_dimension_error("input unit dimension '" + unit.get_dimension_label() + "' != '" + dimension_name + "'");
       }
 
       return value_ * unit_scale / unit;
@@ -107,91 +109,91 @@ namespace falaise {
     double unit_scale{1.0};
   };
 
-
   // Type for "explicit" dimensions
   template <typename Dimension>
   class quantity_t : public quantity {
-   public:
-    quantity_t()=default;
+  public:
+    quantity_t() = default;
 
-    quantity_t(double value, std::string const& unit) : quantity(value, unit) {
-      if(boost::mpl::c_str<typename Dimension::label>::value != dimension()) {
-        throw bad_dimension_error("Dimension of unit '"+unit+"' is not '"+boost::mpl::c_str<typename Dimension::label>::value+"'");
+    quantity_t(double value, std::string const& unit) : quantity(value, unit)
+    {
+      if (boost::mpl::c_str<typename Dimension::label>::value != dimension()) {
+        throw wrong_dimension_error(
+          "dimension of unit '" + unit + "' is not '" +
+          boost::mpl::c_str<typename Dimension::label>::value + "'");
       }
     }
 
     quantity_t(quantity const& q) : quantity_t(q.value(), q.unit()) {}
 
-    virtual ~quantity_t()=default;
+    virtual ~quantity_t() = default;
   };
 
+// Follow nholthaus units and macro-ize the boiler plate
+#define FALAISE_ADD_DIMENSION_TAG(name)                                        \
+  struct name {                                                                \
+    typedef BOOST_METAPARSE_STRING(#name) label;                               \
+  };                                                                           \
+  using name##_t = ::falaise::quantity_t<name>;
 
-  // Follow nholthaus units and macro-ize the boiler plate
-  #define FALAISE_ADD_DIMENSION_TAG(name) \
-  struct name\
-  {\
-    typedef BOOST_METAPARSE_STRING(#name) label; \
-  };\
-  using name ## _t = ::falaise::quantity_t<name>;
-
-FALAISE_ADD_DIMENSION_TAG(absorbed_dose)
-FALAISE_ADD_DIMENSION_TAG(acceleration)
-FALAISE_ADD_DIMENSION_TAG(activity)
-FALAISE_ADD_DIMENSION_TAG(amount)
-FALAISE_ADD_DIMENSION_TAG(angle)
-FALAISE_ADD_DIMENSION_TAG(angular_frequency)
-FALAISE_ADD_DIMENSION_TAG(capacitance)
-FALAISE_ADD_DIMENSION_TAG(conductance)
-FALAISE_ADD_DIMENSION_TAG(conductivity)
-FALAISE_ADD_DIMENSION_TAG(cross_section)
-FALAISE_ADD_DIMENSION_TAG(data_storage)
-FALAISE_ADD_DIMENSION_TAG(data_transfer_rate)
-FALAISE_ADD_DIMENSION_TAG(density)
-FALAISE_ADD_DIMENSION_TAG(electric_charge)
-FALAISE_ADD_DIMENSION_TAG(electric_current)
-FALAISE_ADD_DIMENSION_TAG(electric_displacement_field)
-FALAISE_ADD_DIMENSION_TAG(electric_field)
-FALAISE_ADD_DIMENSION_TAG(electric_flux)
-FALAISE_ADD_DIMENSION_TAG(electric_potential)
-FALAISE_ADD_DIMENSION_TAG(electric_resistance)
-FALAISE_ADD_DIMENSION_TAG(electric_signal_integral)
-FALAISE_ADD_DIMENSION_TAG(energy)
-FALAISE_ADD_DIMENSION_TAG(equivalent_dose)
-FALAISE_ADD_DIMENSION_TAG(force)
-FALAISE_ADD_DIMENSION_TAG(fraction)
-FALAISE_ADD_DIMENSION_TAG(frequency)
-FALAISE_ADD_DIMENSION_TAG(illuminance)
-FALAISE_ADD_DIMENSION_TAG(inductance)
-FALAISE_ADD_DIMENSION_TAG(length)
-FALAISE_ADD_DIMENSION_TAG(level)
-FALAISE_ADD_DIMENSION_TAG(luminance)
-FALAISE_ADD_DIMENSION_TAG(luminous_energy)
-FALAISE_ADD_DIMENSION_TAG(luminous_energy_density)
-FALAISE_ADD_DIMENSION_TAG(luminous_exposure)
-FALAISE_ADD_DIMENSION_TAG(luminous_flux)
-FALAISE_ADD_DIMENSION_TAG(luminous_intensity)
-FALAISE_ADD_DIMENSION_TAG(magnetic_field_strength)
-FALAISE_ADD_DIMENSION_TAG(magnetic_flux)
-FALAISE_ADD_DIMENSION_TAG(magnetic_flux_density)
-FALAISE_ADD_DIMENSION_TAG(mass)
-FALAISE_ADD_DIMENSION_TAG(mass_activity)
-FALAISE_ADD_DIMENSION_TAG(permeability)
-FALAISE_ADD_DIMENSION_TAG(permittivity)
-FALAISE_ADD_DIMENSION_TAG(power)
-FALAISE_ADD_DIMENSION_TAG(pressure)
-FALAISE_ADD_DIMENSION_TAG(procedure_defined)
-FALAISE_ADD_DIMENSION_TAG(resistivity)
-FALAISE_ADD_DIMENSION_TAG(solid_angle)
-FALAISE_ADD_DIMENSION_TAG(surface)
-FALAISE_ADD_DIMENSION_TAG(surface_activity)
-FALAISE_ADD_DIMENSION_TAG(surface_density)
-FALAISE_ADD_DIMENSION_TAG(surface_tension)
-FALAISE_ADD_DIMENSION_TAG(temperature)
-FALAISE_ADD_DIMENSION_TAG(time)
-FALAISE_ADD_DIMENSION_TAG(velocity)
-FALAISE_ADD_DIMENSION_TAG(volume)
-FALAISE_ADD_DIMENSION_TAG(volume_activity)
-FALAISE_ADD_DIMENSION_TAG(wave_number)
+  FALAISE_ADD_DIMENSION_TAG(absorbed_dose)
+  FALAISE_ADD_DIMENSION_TAG(acceleration)
+  FALAISE_ADD_DIMENSION_TAG(activity)
+  FALAISE_ADD_DIMENSION_TAG(amount)
+  FALAISE_ADD_DIMENSION_TAG(angle)
+  FALAISE_ADD_DIMENSION_TAG(angular_frequency)
+  FALAISE_ADD_DIMENSION_TAG(capacitance)
+  FALAISE_ADD_DIMENSION_TAG(conductance)
+  FALAISE_ADD_DIMENSION_TAG(conductivity)
+  FALAISE_ADD_DIMENSION_TAG(cross_section)
+  FALAISE_ADD_DIMENSION_TAG(data_storage)
+  FALAISE_ADD_DIMENSION_TAG(data_transfer_rate)
+  FALAISE_ADD_DIMENSION_TAG(density)
+  FALAISE_ADD_DIMENSION_TAG(electric_charge)
+  FALAISE_ADD_DIMENSION_TAG(electric_current)
+  FALAISE_ADD_DIMENSION_TAG(electric_displacement_field)
+  FALAISE_ADD_DIMENSION_TAG(electric_field)
+  FALAISE_ADD_DIMENSION_TAG(electric_flux)
+  FALAISE_ADD_DIMENSION_TAG(electric_potential)
+  FALAISE_ADD_DIMENSION_TAG(electric_resistance)
+  FALAISE_ADD_DIMENSION_TAG(electric_signal_integral)
+  FALAISE_ADD_DIMENSION_TAG(energy)
+  FALAISE_ADD_DIMENSION_TAG(equivalent_dose)
+  FALAISE_ADD_DIMENSION_TAG(force)
+  FALAISE_ADD_DIMENSION_TAG(fraction)
+  FALAISE_ADD_DIMENSION_TAG(frequency)
+  FALAISE_ADD_DIMENSION_TAG(illuminance)
+  FALAISE_ADD_DIMENSION_TAG(inductance)
+  FALAISE_ADD_DIMENSION_TAG(length)
+  FALAISE_ADD_DIMENSION_TAG(level)
+  FALAISE_ADD_DIMENSION_TAG(luminance)
+  FALAISE_ADD_DIMENSION_TAG(luminous_energy)
+  FALAISE_ADD_DIMENSION_TAG(luminous_energy_density)
+  FALAISE_ADD_DIMENSION_TAG(luminous_exposure)
+  FALAISE_ADD_DIMENSION_TAG(luminous_flux)
+  FALAISE_ADD_DIMENSION_TAG(luminous_intensity)
+  FALAISE_ADD_DIMENSION_TAG(magnetic_field_strength)
+  FALAISE_ADD_DIMENSION_TAG(magnetic_flux)
+  FALAISE_ADD_DIMENSION_TAG(magnetic_flux_density)
+  FALAISE_ADD_DIMENSION_TAG(mass)
+  FALAISE_ADD_DIMENSION_TAG(mass_activity)
+  FALAISE_ADD_DIMENSION_TAG(permeability)
+  FALAISE_ADD_DIMENSION_TAG(permittivity)
+  FALAISE_ADD_DIMENSION_TAG(power)
+  FALAISE_ADD_DIMENSION_TAG(pressure)
+  FALAISE_ADD_DIMENSION_TAG(procedure_defined)
+  FALAISE_ADD_DIMENSION_TAG(resistivity)
+  FALAISE_ADD_DIMENSION_TAG(solid_angle)
+  FALAISE_ADD_DIMENSION_TAG(surface)
+  FALAISE_ADD_DIMENSION_TAG(surface_activity)
+  FALAISE_ADD_DIMENSION_TAG(surface_density)
+  FALAISE_ADD_DIMENSION_TAG(surface_tension)
+  FALAISE_ADD_DIMENSION_TAG(temperature)
+  FALAISE_ADD_DIMENSION_TAG(time)
+  FALAISE_ADD_DIMENSION_TAG(velocity)
+  FALAISE_ADD_DIMENSION_TAG(volume)
+  FALAISE_ADD_DIMENSION_TAG(volume_activity)
+  FALAISE_ADD_DIMENSION_TAG(wave_number)
   // Mass
 
   // Time
@@ -254,20 +256,34 @@ FALAISE_ADD_DIMENSION_TAG(wave_number)
 
   //
 
+  //! Exception thrown when requesting a key that is not in the property_set
+  class missing_key_error : public std::logic_error{
+    using std::logic_error::logic_error;
+  };
 
+  //! Exception thrown when trying to put to a key already in the property_set
+  class existing_key_error : public std::logic_error{
+    using std::logic_error::logic_error;
+  };
+
+  //! Exception thrown when type requested in get<T>(key) does not match that of value at key
+  class wrong_type_error : public std::logic_error{
+    using std::logic_error::logic_error;
+  };
 
   class property_set {
   public:
-    using missing_key_error = std::logic_error;
-    using existing_key_error = std::logic_error;
-    using wrong_type_error = std::logic_error;
-
-    // Need default c'tor as we have user-defined c'tor
+    //! Default constructor
     property_set() = default;
+
+    //! Construct from an existing datatools::properties
+    /*
+     * Takes a copy of the input instance
+     */
     property_set(datatools::properties const& ps);
 
     // - Observers
-    //! Returns true if no key/values pairs are held
+    //! Returns true if no key-value pairs are held
     bool is_empty() const;
 
     //! Returns a list of all keys in the property_set
@@ -279,11 +295,7 @@ FALAISE_ADD_DIMENSION_TAG(wave_number)
     //! Returns a string representation of the property_set
     std::string to_string() const;
 
-    //! Convert back to datatools::properties
-    operator datatools::properties() const;
-
     // - Retrievers
-
     //! Return the value of type T associated with supplied key
     template <typename T>
     T get(std::string const& key) const;
@@ -292,19 +304,20 @@ FALAISE_ADD_DIMENSION_TAG(wave_number)
     // not present
     template <typename T>
     T get(std::string const& key, T const& default_value) const;
+   
+    //! Convert back to datatools::properties
+    operator datatools::properties() const;
 
     // - Inserters
-
-    //! Insert key-value pair in property_set, throwing if key already exist
+    //! Insert key-value pair in property_set, throwing if key is already held
     template <typename T>
     void put(std::string const& key, T const& value);
 
-    //! Insert with replace
+    //! Insert key-value pair in property_set, replacing value if key exists
     template <typename T>
     void put_or_replace(std::string const& key, T const& value);
 
     // - Deleters:
-
     //! Erase the name-value pair matching name, returning true on success,
     // false otherwise
     bool erase(std::string const& key);
@@ -321,11 +334,7 @@ FALAISE_ADD_DIMENSION_TAG(wave_number)
                                       std::vector<double>,
                                       std::vector<bool>,
                                       std::vector<std::string>>;
-    //! Compile-time check that T can be held
-    /*
-     * can_hold_<T>::value : true if T can be held, false otherwise
-     */
-    template <typename T>
+   template <typename T>
     struct can_hold_ {
       typedef typename boost::mpl::contains<types_, T>::type type;
     };
@@ -335,52 +344,59 @@ FALAISE_ADD_DIMENSION_TAG(wave_number)
       typedef std::true_type type;
     };
 
+    //! Compile-time check that T can be held
+    /*
+     * can_hold_t_<T>::value : true if T can be held, false otherwise
+     */
+    template <typename T>
+    using can_hold_t_ = typename can_hold_<T>::type;
+
     //! Return true if value held at key has type T
     /*
      * Assert that T be a holdable type before dispatching to the
-     * implementation function for the specific type
+     * implementation function checking the specific type
      */
     template <typename T>
     bool is_type_(std::string const& key) const;
 
-    //! Return true if value at key has type int
+    //! Return true if value at key is an int
     bool is_type_impl_(std::string const& key, int) const;
 
-    //! Return true if value at key has type double
+    //! Return true if value at key is a dimensionless double
     bool is_type_impl_(std::string const& key, double) const;
 
-    //! Return true if value at key has type bool
+    //! Return true if value at key is a bool
     bool is_type_impl_(std::string const& key, bool) const;
 
-    //! Return true if value at key has type std::string
+    //! Return true if value at key is a non-path std::string
     bool is_type_impl_(std::string const& key, std::string) const;
 
-    //! Return true if value at key has type falaise::path
+    //! Return true if value at key is a falaise::path
     bool is_type_impl_(std::string const& key, path) const;
 
-    //! Return true if value at key has type falaise::quantity
+    //! Return true if value at key is a falaise::quantity
     bool is_type_impl_(std::string const& key, quantity) const;
 
-    //! Return true if value at key has type std::vector<int>
+    //! Return true if value at key is a std::vector<int>
     bool is_type_impl_(std::string const& key, std::vector<int>) const;
 
-    //! Return true if value at key has type std::vector<double>
+    //! Return true if value at key is a std::vector<double> (dimensionless doubles)
     bool is_type_impl_(std::string const& key, std::vector<double>) const;
 
-    //! Return true if value at key has type std::vector<bool>
+    //! Return true if value at key is a std::vector<bool>
     bool is_type_impl_(std::string const& key, std::vector<bool>) const;
 
-    //! Return true if value at key has type std::vector<std::string>
+    //! Return true if value at key is a std::vector<std::string>
     bool is_type_impl_(std::string const& key, std::vector<std::string>) const;
 
     //! Set result to value held at key
     /*
-     * Specialize/overload this for any T requiring type conversion (e.g. path, quantity)
+     * Dispatches to specializations or overloads as known for T
      */
     template <typename T>
     void fetch_impl_(std::string const& key, T& result) const;
 
-    //! Overloaded fetch for explicitly dimensioned quantities
+    //! Overloaded fetch_impl_ for explicitly dimensioned quantities
     template <typename T>
     void fetch_impl_(std::string const& key, quantity_t<T>& result) const;
 
@@ -423,7 +439,6 @@ namespace falaise {
   T
   property_set::get(std::string const& key) const
   {
-    // Check key ourselves so we can throw a more informative error
     if (!ps_.has_key(key)) {
       throw missing_key_error("property_set does not hold a key '" + key + "'");
     }
@@ -455,7 +470,7 @@ namespace falaise {
   void
   property_set::put(std::string const& key, T const& value)
   {
-    static_assert(can_hold_<T>::type::value,
+    static_assert(can_hold_t_<T>::value,
                   "property_set cannot hold values of type T");
     // Check directly to use our clearer exception type
     if (ps_.has_key(key)) {
@@ -516,7 +531,7 @@ namespace falaise {
   bool
   property_set::is_type_(std::string const& key) const
   {
-    static_assert(can_hold_<T>::type::value,
+    static_assert(can_hold_t_<T>::value,
                   "property_set cannot hold values of type T");
     if (ps_.has_key(key)) {
       return is_type_impl_(key, T{});
@@ -534,7 +549,7 @@ namespace falaise {
   bool
   property_set::is_type_impl_(std::string const& key, double) const
   {
-    // Assume extraction of double is always dimensionless
+    // Request for raw double implies a dimensionless number is wanted
     return ps_.is_real(key) && (!ps_.has_explicit_unit(key)) &&
            (!ps_.has_unit_symbol(key)) && ps_.is_scalar(key);
   }
@@ -548,6 +563,7 @@ namespace falaise {
   bool
   property_set::is_type_impl_(std::string const& key, std::string) const
   {
+    // Request for raw string implies a non-path type string is wanted
     return ps_.is_string(key) && (!ps_.is_explicit_path(key)) &&
            ps_.is_scalar(key);
   }
@@ -561,7 +577,7 @@ namespace falaise {
   bool
   property_set::is_type_impl_(std::string const& key, quantity) const
   {
-    // Quantity must be real, and have both explicit unit and unit symbol
+    // Quantity must be real, and have explicit unit *and* unit symbol
     return ps_.is_real(key) && ps_.has_explicit_unit(key) &&
            ps_.has_unit_symbol(key) && ps_.is_scalar(key);
   }
@@ -575,7 +591,7 @@ namespace falaise {
   bool
   property_set::is_type_impl_(std::string const& key, std::vector<double>) const
   {
-    // vector of doubles is always dimensionless
+    // vector of raw doubles is always dimensionless
     return ps_.is_real(key) && (!ps_.has_explicit_unit(key)) &&
            (!ps_.has_unit_symbol(key)) && ps_.is_vector(key);
   }
